@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Eval Dashboard Mockup</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; color: #222; }
+  h1 { font-size: 1.3rem; }
+  .meta { color: #666; margin-bottom: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e0e0e0; font-size: 0.9rem; }
+  th { color: #555; font-weight: 600; }
+  .status { padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+  .fixed { background: #d4f4dd; color: #1a7a3a; }
+  .not-fixed { background: #fbdcdc; color: #a3231e; }
+  .no-pr { background: #eee; color: #555; }
+  a { color: #2a5db0; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <h1>Run: 2026-08-27-nightly (gpt-4.1 / prompt v3)</h1>
+  <div class="meta">42 bugs sourced &middot; 27 fixed &middot; 9 not fixed &middot; 6 no PR opened &middot; mean attempts (successes): 1.6</div>
+  <table>
+    <tr><th>Issue</th><th>Source</th><th>Status</th><th>Attempts</th><th>Trail</th></tr>
+    <tr><td>hashicorp/terraform-provider-aws#31022</td><td>GitHub Issue</td><td><span class="status fixed">fixed</span></td><td>1</td><td><a href="#">view</a></td></tr>
+    <tr><td>SO: "aws_s3_bucket_policy 403 after apply"</td><td>Stack Overflow</td><td><span class="status fixed">fixed</span></td><td>2</td><td><a href="#">view</a></td></tr>
+    <tr><td>terraform-aws-modules/vpc#912</td><td>GitHub Issue</td><td><span class="status not-fixed">not fixed</span></td><td>3</td><td><a href="#">view</a></td></tr>
+    <tr><td>SO: "cyclic dependency in security group rules"</td><td>Stack Overflow</td><td><span class="status no-pr">no PR opened</span></td><td>2</td><td><a href="#">view</a></td></tr>
+  </table>
+</body>
+</html>
