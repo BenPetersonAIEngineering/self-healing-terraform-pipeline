@@ -43,3 +43,21 @@ class ScopedFileTool:
     def list_dir(self, path: str) -> list[str]:
         resolved = self._resolve(path)
         return sorted(os.listdir(resolved))
+
+    _EXCLUDED_DIR_NAMES = {".git", ".venv", "__pycache__", "node_modules", ".terraform", "healer.egg-info"}
+
+    def list_files_recursive(self, path: str = ".", suffix: str = "") -> list[str]:
+        """Recursively lists files under path, relative to it. Needed for
+        real-world repos where the relevant files aren't at the tool's
+        root — confirmed live: a corpus fixture's repo/ is always flat
+        (main.tf at the root), but a real checked-out repo generally
+        isn't (e.g. this project's own demo/main.tf)."""
+        resolved = self._resolve(path)
+        matches = []
+        for dirpath, dirnames, filenames in os.walk(resolved):
+            dirnames[:] = [d for d in dirnames if d not in self._EXCLUDED_DIR_NAMES]
+            for filename in filenames:
+                if suffix and not filename.endswith(suffix):
+                    continue
+                matches.append(os.path.relpath(os.path.join(dirpath, filename), resolved))
+        return sorted(matches)

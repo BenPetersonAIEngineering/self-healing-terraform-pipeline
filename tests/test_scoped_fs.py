@@ -42,6 +42,27 @@ def test_write_creates_new_file_within_root(tmp_path):
     assert (tmp_path / "new_resource.tf").read_text() == "resource {}"
 
 
+def test_list_files_recursive_finds_nested_files(tmp_path):
+    (tmp_path / "demo").mkdir()
+    (tmp_path / "demo" / "main.tf").write_text("resource {}")
+    (tmp_path / "README.md").write_text("hi")
+
+    tool = ScopedFileTool(allowed_roots=[str(tmp_path)])
+    assert tool.list_files_recursive(".", suffix=".tf") == ["demo/main.tf"]
+
+
+def test_list_files_recursive_excludes_noise_directories(tmp_path):
+    (tmp_path / "demo").mkdir()
+    (tmp_path / "demo" / "main.tf").write_text("resource {}")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config.tf").write_text("not a real module file")
+    (tmp_path / ".terraform").mkdir()
+    (tmp_path / ".terraform" / "modules.tf").write_text("also not real")
+
+    tool = ScopedFileTool(allowed_roots=[str(tmp_path)])
+    assert tool.list_files_recursive(".", suffix=".tf") == ["demo/main.tf"]
+
+
 def test_coder_allowlist_is_exact_files_not_whole_repo(tmp_path):
     (tmp_path / "main.tf").write_text("a")
     (tmp_path / "other.tf").write_text("b")

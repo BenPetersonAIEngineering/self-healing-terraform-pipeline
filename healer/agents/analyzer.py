@@ -28,7 +28,7 @@ def diagnose(
     error: StructuredError,
     prior_feedback: ReviewFeedback | None,
 ) -> FileList:
-    tf_files = [f for f in scoped_fs.list_dir(".") if f.endswith(".tf")]
+    tf_files = scoped_fs.list_files_recursive(".", suffix=".tf")
     file_contents = {f: scoped_fs.read(f) for f in tf_files}
 
     user_prompt = _build_user_prompt(error, prior_feedback, file_contents)

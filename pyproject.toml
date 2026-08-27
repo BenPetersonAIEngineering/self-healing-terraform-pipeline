@@ -19,3 +19,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["healer", "healer.tools", "healer.agents", "healer.sourcing", "healer.live"]
+
+[tool.pytest.ini_options]
+# Without this, a live-mode run checking out this repo's own PR branches
+# into runs/live/<pr>/workdir/ leaves a full clone of this project —
+# including tests/ — sitting under runs/, and pytest's default collection
+# picks up those duplicate test modules too (confirmed live: "import file
+# mismatch" across every test file once that happened).
+testpaths = ["tests"]
