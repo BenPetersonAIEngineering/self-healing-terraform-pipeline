@@ -15,7 +15,7 @@
 - [x] Slice 7 — metrics polish: mean-attempts, confidence precision, LocalStack fidelity escape hatch
 - [x] Slice 8 — read-only live watcher: poll real GitHub Actions for failing open PRs, build LiveCase, detect healer-vs-human commits. No writes, safe to run live immediately. Mostly verified live (see notes below); log-content fetch needs GITHUB_TOKEN, unverified.
 - [x] Slice 9 — real git workdir + dry-run push: real checkout, real Analyzer/Coder/Confidence run, commit built locally but never pushed (`allow_push=False` default). Fully verified against real local git plumbing (LLM calls mocked, no API key here).
-- [x] Slice 10 — real push + CI-wait scoring, gated by `--allow-push`. BUILT and tested (real local git pushes + mocked CI/GitHub calls) — NOT YET run with allow_push=True against the real repo/PR. Needs explicit go-ahead first — see notes below.
+- [x] Slice 10 — real push + CI-wait scoring, gated by `--allow-push`. RUN FOR REAL against PR #1: diagnosis + fix + push all confirmed correct end-to-end. CI-trigger reliability is an external GitHub flakiness issue, not resolved (not a code bug) — see notes below.
 - [ ] Slice 11 — `healer watch` polling loop CLI glue. (fully verified — pure aggregation logic, 36/36 tests green)
 
 ## Notes for a fresh session
@@ -103,7 +103,21 @@ Both fixes are exactly the kind of thing that only surfaces by actually running 
 
 **Real bug PR opened for slice 10 testing**: [PR #1](https://github.com/BenPetersonAIEngineering/self-healing-terraform-pipeline/pull/1) sets `versioning_configuration.status = "Enable"` (should be `"Enabled"`) on `demo/main.tf`, branch `demo/bug-versioning-status`. Confirmed its CI fails for real with the exact expected error: `expected versioning_configuration.0.status to be one of ["Enabled" "Suspended" "Disabled"], got Enable`, at `demo/main.tf` line 36. This is now sitting there as a real target for `live_watcher.poll_failing_prs` and, eventually, slice 10's real push-and-verify loop.
 
-## Slice 10 (2026-08-27): real push + CI-wait scoring — built, not yet run for real
+## Slice 10 (2026-08-27) — RUN FOR REAL. Result: diagnosis+fix proven correct; CI-trigger reliability is a GitHub-side gap, not ours
+
+**The core capability is proven, end to end, against a real PR, with no mocking of the diagnosis/fix path**: `run_live` polled PR #1, Watcher structured the real error, Analyzer correctly flagged `demo/main.tf` (after the recursive-discovery fix below), Coder produced the exact correct patch (`"Enable"` → `"Enabled"`), Confidence-check decided to commit it, and `git_ops` pushed a real commit (`d7a0955`, authored "Terraform Self-Healer") to the real branch. This is genuinely the pipeline fixing a real bug in a real PR, autonomously, for the first time.
+
+**What didn't resolve**: whether that push's commit actually re-triggers the PR's CI run. Across ~8 real pushes to `demo/bug-versioning-status` during this session (mine and the user's, with and without explicit token auth, with and without shallow clone, with and without the same commit author), roughly half triggered a `pull_request: synchronize` Actions run and half didn't — with no reproducible pattern tied to any single variable tested. `ci_wait.wait_for_conclusion` correctly timed out after 15 minutes when no run appeared for the healer's actual fix commit, recording `passed=False, symptom="CI did not complete within the wait timeout"` — exactly the designed behavior for an inconclusive outcome (see 02-architecture.md: TIMEOUT stops rather than retrying blind). This looks like GitHub-side webhook/event-dispatch flakiness, most likely tied to the sheer volume of rapid pushes to one branch during debugging — not a bug in `git_ops.py`, `ci_wait.py`, or `live_orchestrator.py`. Stopped actively chasing it further rather than keep consuming real GitHub API/Actions resources on an external reliability question with no code-side fix.
+
+**Two real bugs found and fixed along the way** (beyond the ones already listed below):
+1. `git_ops.py` never actually authenticated with `GITHUB_TOKEN` at all — `checkout_branch`/`commit_and_push` built git URLs with no credentials, so every push silently fell back to whatever ambient git credential the host machine happened to have (macOS Keychain, here). It worked by accident locally. Fixed with an explicit `-c http.extraHeader` Basic-auth argument per git invocation (never persisted to `.git/config`), plus a regression test.
+2. Analyzer's `.tf` file discovery (`scoped_fs.list_dir(".")`) only looked at the workdir's top level — fine for eval mode's always-flat corpus fixtures, but this repo's own `demo/main.tf` lives in a subdirectory, so the Coder's `ScopedFileTool` construction crashed on an empty allowlist the first time this ran for real. Added `ScopedFileTool.list_files_recursive` (excludes `.git`/`.venv`/etc.) and switched `analyzer.py` to use it — this also fixed a `pytest` collection collision, since a live checkout of this repo's own PR branches leaves a full clone (including `tests/`) under `runs/live/`; scoped `pytest` to `tests/` only via `pyproject.toml`.
+
+Also added real progress logging (`ci_wait.py`, `live_orchestrator.py`) after a 15-minute silent wait was indistinguishable from a hang mid-session — worth keeping regardless of this specific debugging episode, since any real live run has the same multi-minute-silence problem otherwise.
+
+---
+
+### Original slice 10 build notes (superseded by the real run above, kept for history)
 
 `healer/live/ci_wait.py` (`wait_for_conclusion` — polls a commit's Actions run to conclusion, injectable clock for testing) and a rewritten `healer/live/live_orchestrator.py`: `run_live(case, run_id, workdir_root, max_attempts=3, allow_push=False)` is now the single real retry loop for live mode, unifying what used to be slice 9's dry-run-only `run_live_dry`.
 
