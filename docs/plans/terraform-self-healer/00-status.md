@@ -15,7 +15,7 @@
 - [x] Slice 7 — metrics polish: mean-attempts, confidence precision, LocalStack fidelity escape hatch
 - [x] Slice 8 — read-only live watcher: poll real GitHub Actions for failing open PRs, build LiveCase, detect healer-vs-human commits. No writes, safe to run live immediately. Mostly verified live (see notes below); log-content fetch needs GITHUB_TOKEN, unverified.
 - [x] Slice 9 — real git workdir + dry-run push: real checkout, real Analyzer/Coder/Confidence run, commit built locally but never pushed (`allow_push=False` default). Fully verified against real local git plumbing (LLM calls mocked, no API key here).
-- [ ] Slice 10 — real push + CI-wait scoring, gated by `--allow-push`. NEEDS EXPLICIT GO-AHEAD before ever running for real against an actual repo — see 04-slices.md.
+- [x] Slice 10 — real push + CI-wait scoring, gated by `--allow-push`. BUILT and tested (real local git pushes + mocked CI/GitHub calls) — NOT YET run with allow_push=True against the real repo/PR. Needs explicit go-ahead first — see notes below.
 - [ ] Slice 11 — `healer watch` polling loop CLI glue. (fully verified — pure aggregation logic, 36/36 tests green)
 
 ## Notes for a fresh session
@@ -102,5 +102,15 @@ Project is now a real GitHub repo: **https://github.com/BenPetersonAIEngineering
 Both fixes are exactly the kind of thing that only surfaces by actually running something for real — neither would have been caught by more mocked unit tests.
 
 **Real bug PR opened for slice 10 testing**: [PR #1](https://github.com/BenPetersonAIEngineering/self-healing-terraform-pipeline/pull/1) sets `versioning_configuration.status = "Enable"` (should be `"Enabled"`) on `demo/main.tf`, branch `demo/bug-versioning-status`. Confirmed its CI fails for real with the exact expected error: `expected versioning_configuration.0.status to be one of ["Enabled" "Suspended" "Disabled"], got Enable`, at `demo/main.tf` line 36. This is now sitting there as a real target for `live_watcher.poll_failing_prs` and, eventually, slice 10's real push-and-verify loop.
+
+## Slice 10 (2026-08-27): real push + CI-wait scoring — built, not yet run for real
+
+`healer/live/ci_wait.py` (`wait_for_conclusion` — polls a commit's Actions run to conclusion, injectable clock for testing) and a rewritten `healer/live/live_orchestrator.py`: `run_live(case, run_id, workdir_root, max_attempts=3, allow_push=False)` is now the single real retry loop for live mode, unifying what used to be slice 9's dry-run-only `run_live_dry`.
+
+Retry condition is narrower than eval mode's: a live attempt only continues to the next one when it actually pushed a commit AND that commit's CI genuinely came back `FAILURE` — real new information worth retrying on. WITHHOLD, a no-op commit, CI SUCCESS, and CI TIMEOUT all stop rather than retry (see the module docstring for the reasoning per outcome). On a CI failure, the next attempt's Analyzer gets fed the *actual new* log excerpt from that failing run (reusing slice 8's fixed `_fetch_failure_log_excerpt`), not a stale copy of the original error.
+
+11 tests across `test_ci_wait.py` (5, fully mocked GitHub calls + fake clock) and `test_live_orchestrator.py` (6, extended from slice 9 — real local git pushes across a multi-attempt retry sequence, only `ci_wait.wait_for_conclusion` and the log-fetch call mocked, since real CI-run polling needs an actual GitHub Actions run). 61/61 tests total, all green.
+
+**Deliberately not yet run with `allow_push=True` against the real repo.** PR #1 is sitting there as the real target (see below), and everything needed to exercise this for real is built and tested — but per 02-architecture.md's Live-trigger integration section, the first real push to an actual branch needs the user's explicit go-ahead in the moment, not just code that compiles and passes mocked tests.
 
 **Ran the real slice-8 watcher against this real PR — found one more real bug.** `poll_failing_prs` correctly found PR #1 and correctly flagged it as human-authored (fresh problem, no `Healer-Attempt` trailer), but the captured "error excerpt" was 4000 characters of post-failure noise (`docker rm`, git config cleanup, a Node.js deprecation warning) — the actual Terraform error had already scrolled past because `_fetch_failure_log_excerpt` just took the last N characters of the raw log, and this log kept going for ~3.6k characters *after* the real failure. Fixed by windowing backward from the last GitHub Actions `##[error]` marker instead of just taking the tail. Re-ran the real watcher after the fix: excerpt is now the exact `terraform validate` error text, verbatim. This would have silently fed the Analyzer garbage context on every real bug with a long enough log — another one that only a real run could have caught.
