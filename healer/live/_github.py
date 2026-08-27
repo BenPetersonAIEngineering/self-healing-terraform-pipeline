@@ -1,9 +1,8 @@
 """Shared authenticated GitHub REST API helpers for the live/ package.
 
-Read-only today (slice 8). git_ops.py (slice 9/10) will need a token with
-write access to push commits — that's a materially bigger permission than
-anything here, and is called out explicitly in 02-architecture.md's
-External section rather than silently assumed.
+Needs a token with write access starting at slice 9 (git push) — see
+02-architecture.md's External section. Confirmed live (2026-08-27) that
+even read-only log fetching needs one too (slice 8 finding).
 """
 import json
 import os
@@ -24,13 +23,32 @@ def _url(path_or_url: str) -> str:
     return path_or_url if path_or_url.startswith("http") else f"{GITHUB_API}{path_or_url}"
 
 
+class _StripAuthOnRedirect(urllib.request.HTTPRedirectHandler):
+    """Some GitHub endpoints (job logs) 302 to signed blob storage that
+    rejects requests carrying our GitHub Authorization header — a stray
+    401 on the *redirected* request, confirmed live against a real repo.
+    urllib forwards request headers across redirects by default; this
+    strips Authorization on the hop so only the initial GitHub API request
+    is authenticated, matching what a browser/curl -L would actually do.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new_req is not None:
+            new_req.remove_header("Authorization")
+        return new_req
+
+
+_opener = urllib.request.build_opener(_StripAuthOnRedirect)
+
+
 def get_json(path_or_url: str) -> dict | list:
     req = urllib.request.Request(_url(path_or_url), headers=_headers())
-    with urllib.request.urlopen(req) as resp:
+    with _opener.open(req) as resp:
         return json.loads(resp.read())
 
 
 def get_text(path_or_url: str, accept: str = "application/vnd.github+json") -> str:
     req = urllib.request.Request(_url(path_or_url), headers=_headers(accept))
-    with urllib.request.urlopen(req) as resp:
+    with _opener.open(req) as resp:
         return resp.read().decode("utf-8", errors="replace")

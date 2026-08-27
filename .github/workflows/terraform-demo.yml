@@ -14,7 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     services:
       localstack:
-        image: localstack/localstack:latest
+        # Pinned, not :latest — LocalStack merged community+pro into one
+        # image in March 2026, and :latest now refuses to start without a
+        # LOCALSTACK_AUTH_TOKEN even for community-tier features (confirmed
+        # live: exit code 55, "License activation failed"). 4.4.0 is the
+        # last pre-merge community-only release.
+        image: localstack/localstack:4.4.0
         ports:
           - 4566:4566
         env:
