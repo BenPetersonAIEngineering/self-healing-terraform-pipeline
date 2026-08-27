@@ -1,0 +1,53 @@
+name: Terraform demo (LocalStack)
+
+on:
+  pull_request:
+    paths:
+      - "demo/**"
+  push:
+    branches: [main]
+    paths:
+      - "demo/**"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Wait for LocalStack
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:4566/_localstack/health && exit 0
+            sleep 3
+          done
+          echo "LocalStack never became healthy" >&2
+          exit 1
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      - name: terraform validate
+        run: terraform validate
+
+      - name: terraform apply
+        run: terraform apply -auto-approve -input=false
