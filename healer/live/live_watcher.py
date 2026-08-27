@@ -50,7 +50,22 @@ def _fetch_failure_log_excerpt(owner: str, repo: str, run_id: int, max_chars: in
     # happens) — the redirected response body is plain text regardless of
     # what we asked for, and we just read it as bytes/text either way.
     log_text = _github.get_text(f"/repos/{owner}/{repo}/actions/jobs/{job_id}/logs")
-    return log_text[-max_chars:]
+    return _extract_error_excerpt(log_text, max_chars)
+
+
+def _extract_error_excerpt(log_text: str, max_chars: int) -> str:
+    """Confirmed live: a job's log keeps going well past its actual
+    failure (container teardown, git cleanup, deprecation warnings) — the
+    last N chars of the raw log is mostly that noise, not the error. GitHub
+    Actions marks real failures with a literal "##[error]" line; window
+    backward from the last one instead of just taking the tail."""
+    last_marker = log_text.rfind("##[error]")
+    if last_marker == -1:
+        return log_text[-max_chars:]
+    line_end = log_text.find("\n", last_marker)
+    end = line_end + 1 if line_end != -1 else len(log_text)
+    start = max(0, end - max_chars)
+    return log_text[start:end]
 
 
 def _fetch_commit_message(owner: str, repo: str, sha: str) -> str:
