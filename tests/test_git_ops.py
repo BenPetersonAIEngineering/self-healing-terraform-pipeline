@@ -95,6 +95,18 @@ def test_commit_and_push_real_push_advances_the_remote_branch(tmp_path, monkeypa
     assert _bare_branch_tip(bare, "fix-branch") != tip_before
 
 
+def test_auth_args_includes_explicit_basic_auth_when_token_set(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "abc123")
+    args = git_ops._auth_args()
+    assert args[0] == "-c"
+    assert args[1].startswith("http.extraHeader=Authorization: Basic ")
+
+
+def test_auth_args_empty_when_no_token(monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert git_ops._auth_args() == []
+
+
 def test_commit_and_push_noop_when_patch_touches_nothing(tmp_path, monkeypatch):
     bare = _make_bare_repo_with_branch(tmp_path, "fix-branch", "main.tf", 'instance_type = "t2.micro"\n')
     monkeypatch.setattr(git_ops, "_repo_url", lambda owner, repo: str(bare))

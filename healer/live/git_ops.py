@@ -17,6 +17,8 @@ caller explicitly opts in. Slice 10 is the one that actually flips it on
 against a real repo, and only after asking first — see
 02-architecture.md's Live-trigger integration section.
 """
+import base64
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -44,6 +46,27 @@ def _repo_url(owner: str, repo: str) -> str:
     return f"https://github.com/{owner}/{repo}.git"
 
 
+def _auth_args() -> list[str]:
+    """Explicit -c http.extraHeader auth for this git invocation only —
+    never persisted to the workdir's .git/config (unlike embedding a
+    token in the remote URL, which would leave it at rest on disk).
+
+    Confirmed live (2026-08-27): without this, checkout_branch/
+    commit_and_push silently fell back to whatever ambient git credential
+    the *host machine* happened to have (macOS Keychain, in this case) —
+    it worked, but only by accident, and a push authenticated that way
+    did not trigger the PR's pull_request:synchronize Actions run at all.
+    An explicit token push (verified separately) did trigger it correctly.
+    GITHUB_TOKEN needs read access for live_watcher too — see
+    02-architecture.md's External section.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return []
+    basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return ["-c", f"http.extraHeader=Authorization: Basic {basic}"]
+
+
 def checkout_branch(owner: str, repo: str, branch: str, workdir: Path) -> None:
     if workdir.exists():
         shutil.rmtree(workdir)
@@ -52,7 +75,10 @@ def checkout_branch(owner: str, repo: str, branch: str, workdir: Path) -> None:
     # --single-branch clone sets up the local branch to track the matching
     # remote branch, so a later bare `git push` (no refspec) in
     # commit_and_push lands back on this same branch.
-    _run(["git", "clone", "--branch", branch, "--single-branch", "--depth", "1", url, str(workdir)], cwd=workdir.parent)
+    _run(
+        ["git", *_auth_args(), "clone", "--branch", branch, "--single-branch", "--depth", "1", url, str(workdir)],
+        cwd=workdir.parent,
+    )
 
 
 def commit_and_push(workdir: Path, patch: Patch, attempt_number: int, allow_push: bool) -> PushResult:
@@ -83,5 +109,5 @@ def commit_and_push(workdir: Path, patch: Patch, attempt_number: int, allow_push
             would_push_message=f"would push {commit_sha[:8]} to origin: {message.splitlines()[0]}",
         )
 
-    _run(["git", "push"], cwd=workdir)
+    _run(["git", *_auth_args(), "push"], cwd=workdir)
     return PushResult(pushed=True, commit_sha=commit_sha, would_push_message=None)

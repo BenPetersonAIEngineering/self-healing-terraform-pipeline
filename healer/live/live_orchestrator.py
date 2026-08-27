@@ -19,6 +19,7 @@ Live-trigger integration section for why that needs an explicit
 human go-ahead before ever running against a real repo, not just before
 the code exists.
 """
+import sys
 from pathlib import Path
 
 from healer.agents import analyzer, coder, confidence, watcher
@@ -30,11 +31,16 @@ from healer.thread import Thread
 from healer.tools.scoped_fs import ScopedFileTool
 
 
+def _log(msg: str) -> None:
+    print(f"[live_orchestrator] {msg}", flush=True, file=sys.stderr)
+
+
 def run_live(
     case: LiveCase, run_id: str, workdir_root: Path, max_attempts: int = 3, allow_push: bool = False
 ) -> tuple[Thread, PushResult | None]:
     thread = Thread.load(run_id, str(case.pr_number))
 
+    _log(f"PR #{case.pr_number}: checking out {case.branch} (allow_push={allow_push})")
     workdir = workdir_root / str(case.pr_number) / "workdir"
     git_ops.checkout_branch(case.owner, case.repo, case.branch, workdir)
 
@@ -42,25 +48,32 @@ def run_live(
     last_push_result: PushResult | None = None
 
     for attempt_number in range(len(thread.attempts) + 1, max_attempts + 1):
+        _log(f"attempt {attempt_number}/{max_attempts}: structuring error and diagnosing")
         structured_error = watcher.structure_error(current_error_output)
 
         analyzer_fs = ScopedFileTool(allowed_roots=[str(workdir)])
         file_list = analyzer.diagnose(analyzer_fs, structured_error, thread.latest_feedback())
+        _log(f"attempt {attempt_number}: Analyzer flagged {file_list.paths}")
 
         coder_roots = [str(workdir / p) for p in file_list.paths]
         coder_fs = ScopedFileTool(allowed_roots=coder_roots)
         patch = coder.implement_fix(coder_fs, file_list, structured_error)
+        _log(f"attempt {attempt_number}: Coder touched {patch.touched_paths}")
 
         verdict = confidence.assess(patch, thread)
+        _log(f"attempt {attempt_number}: confidence={verdict.decision.value} score={verdict.score} ({verdict.reason})")
 
         review_feedback: ReviewFeedback | None = None
         should_retry = False
 
         if verdict.decision == CommitDecision.COMMIT:
             last_push_result = git_ops.commit_and_push(workdir, patch, attempt_number, allow_push=allow_push)
+            _log(f"attempt {attempt_number}: commit_and_push -> pushed={last_push_result.pushed} sha={last_push_result.commit_sha}")
 
             if last_push_result.pushed:
+                _log(f"attempt {attempt_number}: waiting for CI on {last_push_result.commit_sha[:8]}...")
                 ci_result = ci_wait.wait_for_conclusion(case.owner, case.repo, last_push_result.commit_sha)
+                _log(f"attempt {attempt_number}: CI outcome = {ci_result.outcome.value}")
 
                 if ci_result.outcome == ci_wait.CiOutcome.SUCCESS:
                     review_feedback = ReviewFeedback(passed=True, resource=None, symptom=None, attempt_delta=None)

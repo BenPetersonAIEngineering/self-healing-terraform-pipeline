@@ -6,11 +6,16 @@ CI run *is* the reviewer — push, then poll that run to conclusion.
 reasonable (see 03-program-design.md's addendum, least-confident-decision
 #7) — not yet measured against this repo's actual CI runtime.
 """
+import sys
 import time
 from dataclasses import dataclass
 from enum import Enum
 
 from healer.live import _github
+
+
+def _log(msg: str) -> None:
+    print(f"[ci_wait] {msg}", flush=True, file=sys.stderr)
 
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_POLL_INTERVAL_SECONDS = 15
@@ -52,7 +57,9 @@ def wait_for_conclusion(
         run = _find_run_for_sha(owner, repo, commit_sha)
         if run is not None and run.get("status") == "completed":
             outcome = CiOutcome.SUCCESS if run.get("conclusion") == "success" else CiOutcome.FAILURE
+            _log(f"run {run['id']} completed: {run.get('conclusion')}")
             return CiResult(outcome=outcome, run_id=run["id"])
+        _log(f"run {run['id'] if run else '(not found yet)'} status={run.get('status') if run else None}, still waiting...")
         if _now() >= deadline:
             return CiResult(outcome=CiOutcome.TIMEOUT, run_id=run["id"] if run is not None else None)
         _sleep(poll_interval_seconds)
