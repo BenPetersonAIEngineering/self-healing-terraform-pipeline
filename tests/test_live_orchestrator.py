@@ -239,7 +239,7 @@ def test_dry_run_never_posts_a_pr_comment(tmp_path, monkeypatch):
     assert posted == []
 
 
-def test_allow_push_withhold_posts_a_comment_without_a_ci_result(tmp_path, monkeypatch):
+def test_allow_push_withhold_posts_no_comment(tmp_path, monkeypatch):
     posted = []
     _make_bare_repo_with_branch(tmp_path, "fix-branch", "main.tf", 'instance_type = "t2.micro"\n')
     bare = tmp_path / "remote.git"
@@ -265,11 +265,7 @@ def test_allow_push_withhold_posts_a_comment_without_a_ci_result(tmp_path, monke
         _case(pr_number=50, error="Error: something else"), run_id="live-test", workdir_root=tmp_path / "live", allow_push=True
     )
 
-    assert len(posted) == 1
-    pr_number, body = posted[0]
-    assert pr_number == 50
-    assert "WITHHOLD" in body
-    assert "CI result" not in body
+    assert posted == []
 
 
 def test_live_analyzer_flagging_no_files_withholds_instead_of_crashing(tmp_path, monkeypatch):
@@ -289,4 +285,4 @@ def test_live_analyzer_flagging_no_files_withholds_instead_of_crashing(tmp_path,
     assert thread.attempts[0].patch.touched_paths == []
     assert thread.attempts[0].confidence.decision.value == "withhold"
     assert push_result is None
-    assert len(posted) == 1  # withhold still gets a visibility comment
+    assert posted == []  # withhold posts no comment — not a real attempt worth surfacing

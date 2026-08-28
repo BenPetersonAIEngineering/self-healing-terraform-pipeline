@@ -127,13 +127,14 @@ def run_live(
                         pr_comment.format_comment(attempt_number, verdict, patch, ci_result),
                     )
             # not pushed (dry run, or the Coder made no change): review stays None, nothing to wait on
-        elif allow_push:
-            # WITHHOLD: no push happened, but still worth telling the PR why
-            # the healer looked at it and did nothing — that's the whole
-            # point of this feature (visibility), not just successful fixes.
-            pr_comment.post_comment(
-                case.owner, case.repo, case.pr_number, pr_comment.format_comment(attempt_number, verdict, patch, None)
-            )
+        # WITHHOLD: no comment. A comment is a claim "the healer attempted a
+        # fix" — posting one for a no-op (or worse, an internal error that
+        # happens to degrade into WITHHOLD, like the empty-file-list guard
+        # above) reads as if the healer looked and found nothing to do,
+        # which isn't a distinction a PR comment can convey. Decided
+        # 2026-08-28 after a real WITHHOLD comment (caused by the
+        # checkout_branch path bug, not a real judgment) read as misleading
+        # noise on a real PR. See 02-architecture.md's amendment.
 
         thread.attempts.append(
             AttemptRecord(
