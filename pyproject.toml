@@ -12,6 +12,7 @@ dependencies = [
 healer = "healer.cli:main_entry"
 healer-source = "healer.sourcing.github_source:main_entry"
 healer-live-watch = "healer.live.live_watcher:main_entry"
+healer-run-pr = "healer.live.run_pr:main_entry"
 
 [build-system]
 requires = ["setuptools>=68"]

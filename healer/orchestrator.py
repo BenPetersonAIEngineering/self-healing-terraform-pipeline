@@ -46,7 +46,7 @@ def run_bug(run_id: str, bug_id: str, max_attempts: int = 3) -> Thread:
         coder_fs = ScopedFileTool(allowed_roots=coder_roots)
         patch = coder.implement_fix(coder_fs, file_list, structured_error)
 
-        verdict = confidence.assess(patch, thread)
+        verdict = confidence.assess(patch, file_list, structured_error, thread)
 
         review_feedback = None
         if verdict.decision == CommitDecision.COMMIT:

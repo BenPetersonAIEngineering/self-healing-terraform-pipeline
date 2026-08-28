@@ -23,4 +23,6 @@ def fixing_fake_complete(system: str, user: str, max_tokens: int = 2048) -> str:
         content = user.split(f"--- {path} ---\n", 1)[1]
         fixed = content.replace("t2.micrio", "t2.micro")
         return json.dumps({"files": [{"path": path, "content": fixed}]})
+    if "Confidence-check agent" in system:
+        return json.dumps({"score": 0.9, "reason": "fake: patch matches the diagnosed error"})
     raise AssertionError(f"fake_llm got an unrecognized system prompt: {system[:80]!r}")

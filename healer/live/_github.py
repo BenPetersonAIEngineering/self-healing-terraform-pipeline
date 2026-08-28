@@ -52,3 +52,12 @@ def get_text(path_or_url: str, accept: str = "application/vnd.github+json") -> s
     req = urllib.request.Request(_url(path_or_url), headers=_headers(accept))
     with _opener.open(req) as resp:
         return resp.read().decode("utf-8", errors="replace")
+
+
+def post_json(path_or_url: str, payload: dict) -> dict:
+    headers = _headers()
+    headers["Content-Type"] = "application/json"
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(_url(path_or_url), data=body, method="POST", headers=headers)
+    with _opener.open(req) as resp:
+        return json.loads(resp.read())

@@ -56,6 +56,8 @@ def test_retry_stops_at_max_attempts_when_review_always_fails(tmp_path, monkeypa
             # never the change the (mocked) reviewer will accept.
             new_content = content + f"\n# attempt-{coder_calls['n']}\n"
             return json.dumps({"files": [{"path": path, "content": new_content}]})
+        if "Confidence-check agent" in system:
+            return json.dumps({"score": 0.9, "reason": "fake: patch matches the diagnosed error"})
         raise AssertionError(f"unexpected system prompt: {system[:60]!r}")
 
     monkeypatch.setattr(llm, "complete", fake_complete)
@@ -88,6 +90,8 @@ def test_confidence_withhold_still_consumes_an_attempt_and_retries(tmp_path, mon
             content = user.split(f"--- {path} ---\n", 1)[1]
             fixed = content.replace("t2.micrio", "t2.micro")
             return json.dumps({"files": [{"path": path, "content": fixed}]})
+        if "Confidence-check agent" in system:
+            return json.dumps({"score": 0.9, "reason": "fake: patch matches the diagnosed error"})
         raise AssertionError(f"unexpected system prompt: {system[:60]!r}")
 
     monkeypatch.setattr(llm, "complete", fake_complete)
@@ -151,6 +155,8 @@ def test_failed_review_feedback_is_threaded_into_next_analyzer_call(tmp_path, mo
             content = user.split(f"--- {path} ---\n", 1)[1]
             fixed = content.replace("t2.micrio", "t2.micro")
             return json.dumps({"files": [{"path": path, "content": fixed}]})
+        if "Confidence-check agent" in system:
+            return json.dumps({"score": 0.9, "reason": "fake: patch matches the diagnosed error"})
         raise AssertionError(f"unexpected system prompt: {system[:60]!r}")
 
     monkeypatch.setattr(llm, "complete", fake_complete)

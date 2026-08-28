@@ -1,0 +1,45 @@
+name: Self-heal on CI failure
+
+# Fires when terraform-demo.yml finishes on a PR with conclusion=failure.
+# workflow_run only fires for workflows from this repo (not forks), which
+# matches the single-owner-no-forks constraint this whole pipeline design
+# relies on (CLAUDE.md). See docs/plans/terraform-self-healer/
+# 02-architecture.md's 2026-08-27 amendment for why GITHUB_TOKEN below is
+# a repo secret (a PAT), not the default Actions-injected token: the
+# default token cannot re-trigger downstream workflow runs on its own
+# pushes, which would silently reintroduce the CI-trigger bug documented
+# in investigation-ci-trigger-flakiness.md.
+on:
+  workflow_run:
+    workflows: ["Terraform demo (LocalStack)"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  heal:
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -e .
+
+      - name: Run self-healer on the failing PR
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.HEALER_GITHUB_TOKEN }}
+        run: |
+          healer-run-pr \
+            "${{ github.event.repository.owner.login }}" \
+            "${{ github.event.repository.name }}" \
+            "${{ github.event.workflow_run.pull_requests[0].number }}" \
+            --run-id "self-heal-${{ github.run_id }}" \
+            --allow-push

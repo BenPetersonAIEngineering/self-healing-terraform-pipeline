@@ -300,3 +300,66 @@ Note the WITHHOLD branch **stops** rather than retrying immediately in live mode
 5. **Attempt-reset-on-human-commit relies entirely on a commit trailer convention.** If someone manually edits a healer commit (rebase, amend) the trailer could survive onto a human change, or a human's commit message could accidentally contain the same trailer text. Low risk in a single-owner repo, but worth a code comment flagging the assumption rather than silently trusting it forever.
 6. ~~No explicit "give up and notify a human" step.~~ **Resolved 2026-08-27**: intentionally no separate notification. After `max_attempts` failed live attempts, `run_live` just stops and the MR is left with its CI still failing — that failure *is* the notification (it's what a human would see regardless of whether the healer ever existed). No PR comment, no external alert. Revisit only if this stops being a single-owner repo someone is actively watching.
 7. ~~`timeout_seconds=900` (15 min) is a guess.~~ **Resolved 2026-08-27**: confirmed as the right starting value. Still worth checking against real pipeline runtime once slice 10 actually runs live, but not a blocker.
+
+## Amendment (2026-08-27): real Confidence-check scoring
+
+### Files
+- `healer/agents/confidence.py` — rewritten: deterministic pre-checks + real LLM call, replacing the slice-1 stub.
+- `healer/orchestrator.py`, `healer/live/live_orchestrator.py` — updated call site: `confidence.assess(patch, file_list, structured_error, thread)`.
+- `tests/fake_llm.py` — add a `"Confidence-check agent"` branch.
+- `tests/test_confidence.py` (new) — unit tests for the pre-checks and the LLM-scored path.
+- `tests/test_orchestrator.py`, `tests/test_live_orchestrator.py`, `tests/test_retry.py` — existing tests that construct `ConfidenceVerdict`/call `assess` directly updated to the new signature.
+
+### Types & signatures
+
+```python
+COMMIT_THRESHOLD = 0.6  # module constant in confidence.py
+
+def assess(
+    patch: Patch,
+    file_list: FileList,
+    error: StructuredError,
+    thread: Thread,
+) -> ConfidenceVerdict: ...
+
+def _is_repeat_of_failed_attempt(patch: Patch, thread: Thread) -> bool: ...
+# True iff some prior AttemptRecord has review.passed is False and a
+# whitespace-normalized-equal unified_diff.
+
+def _normalize_diff(diff: str) -> str: ...
+# strips trailing whitespace per line + blank lines, for the repeat check
+# only — never used for anything that touches eval/ or scoring correctness.
+```
+
+`ConfidenceVerdict` (models.py) is unchanged — still `score: float, decision: CommitDecision, reason: str`.
+
+### Call stack (both orchestrators, symmetric)
+
+```
+file_list = analyzer.diagnose(...)
+patch = coder.implement_fix(...)
+verdict = confidence.assess(patch, file_list, structured_error, thread)
+  if not patch.touched_paths:
+      -> score=0.0, WITHHOLD, reason="no files touched"
+  elif _is_repeat_of_failed_attempt(patch, thread):
+      -> score=0.0, WITHHOLD, reason="identical to a prior failed attempt's patch"
+  else:
+      -> llm.complete(SYSTEM_PROMPT, user_prompt built from error/file_list/patch/thread history)
+      -> parse {"score": float, "reason": str}
+      -> COMMIT if score >= COMMIT_THRESHOLD else WITHHOLD
+```
+
+### Test plan
+
+- `test_empty_patch_withholds_without_llm_call` — `touched_paths=[]` → `WITHHOLD`, and the fake LLM is never invoked (asserted via a fake that raises if called).
+- `test_repeat_of_failed_attempt_withholds_without_llm_call` — thread has one prior attempt with the same diff and `review.passed=False` → `WITHHOLD`, LLM never invoked.
+- `test_repeat_of_successful_attempt_does_not_short_circuit` — a prior *passing* attempt with the same diff (e.g. a re-run) should not be misread as a repeat-of-failure; falls through to the LLM path. (Guards against over-generalizing the repeat check.)
+- `test_high_score_commits` — fake LLM returns `score=0.85` → `COMMIT`.
+- `test_low_score_withholds` — fake LLM returns `score=0.3` → `WITHHOLD`.
+- `test_score_exactly_at_threshold_commits` — `score=0.6` → `COMMIT` (boundary is inclusive, documented so it isn't re-litigated later).
+- `test_malformed_llm_response_withholds_defensively` — non-JSON or missing `score` key from the LLM → `WITHHOLD` with a reason noting the parse failure, never crashes the pipeline (same defensive posture as Analyzer's fallback-to-all-.tf-files).
+
+### Least confident decisions
+
+8. **`COMMIT_THRESHOLD = 0.6` is a guess**, same status as `ci_wait`'s original 900s timeout — no real precision/recall data exists yet to tune it against (that's exactly what slice 7's `confidence_precision` metric is for, but it needs real runs first). Flagging now so it's remembered as a knob, not treated as validated.
+9. **Repeat-diff check is exact-match (post-normalization), not semantic.** A second attempt that fixes the same bug in a trivially different way (different quoting, reordered attributes) won't be caught, and will burn an LLM call needlessly. Accepted for now — false negatives here just cost one extra LLM call, not correctness; a semantic diff-similarity check would be real added complexity for a small efficiency gain.

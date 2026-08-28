@@ -3,7 +3,7 @@ import subprocess
 
 from healer import llm
 from healer import thread as thread_module
-from healer.live import ci_wait, git_ops, live_orchestrator, live_watcher
+from healer.live import ci_wait, git_ops, live_orchestrator, live_watcher, pr_comment
 from healer.live.live_watcher import LiveCase
 
 _ENV = ["-c", "user.email=fixture@localhost", "-c", "user.name=Fixture"]
@@ -49,14 +49,21 @@ def _fake_llm_that_fixes_typo(system, user, max_tokens=2048):
             # apart from a no-op WITHHOLD.
             fixed = content + "# second-attempt-marker\n"
         return json.dumps({"files": [{"path": path, "content": fixed}]})
+    if "Confidence-check agent" in system:
+        return json.dumps({"score": 0.9, "reason": "fake: patch matches the diagnosed error"})
     raise AssertionError(f"unexpected system prompt: {system[:60]!r}")
 
 
-def _setup(tmp_path, monkeypatch, initial_content):
+def _setup(tmp_path, monkeypatch, initial_content, posted_comments=None):
     bare = _make_bare_repo_with_branch(tmp_path, "fix-branch", "main.tf", initial_content)
     monkeypatch.setattr(git_ops, "_repo_url", lambda owner, repo: str(bare))
     monkeypatch.setattr(thread_module, "RUNS_ROOT", tmp_path / "runs")
     monkeypatch.setattr(llm, "complete", _fake_llm_that_fixes_typo)
+    if posted_comments is None:
+        posted_comments = []
+    monkeypatch.setattr(
+        pr_comment, "post_comment", lambda owner, repo, pr_number, body: posted_comments.append((pr_number, body))
+    )
     return bare
 
 
@@ -169,6 +176,27 @@ def test_run_live_allow_push_stops_on_timeout_without_retrying(tmp_path, monkeyp
     assert thread.attempts[0].review.attempt_delta == "timeout"
 
 
+def test_run_live_allow_push_stops_on_no_run_without_retrying(tmp_path, monkeypatch):
+    """NO_RUN is never transient (GitHub dispatched nothing), so re-pushing the
+    same tree would just burn attempts — stop after one and carry the reason."""
+    _setup(tmp_path, monkeypatch, 'instance_type = "t2.micrio"\n')
+
+    monkeypatch.setattr(
+        ci_wait,
+        "wait_for_conclusion",
+        lambda owner, repo, sha, **kw: ci_wait.CiResult(
+            outcome=ci_wait.CiOutcome.NO_RUN, run_id=None, detail="PR #1 now has 0 changed files against main"
+        ),
+    )
+
+    thread, push_result = live_orchestrator.run_live(_case(pr_number=46), run_id="live-test", workdir_root=tmp_path / "live", allow_push=True)
+
+    assert len(thread.attempts) == 1
+    assert thread.attempts[0].review.passed is False
+    assert thread.attempts[0].review.attempt_delta == "no-run"
+    assert "0 changed files" in thread.attempts[0].review.symptom
+
+
 def test_run_live_allow_push_stops_at_max_attempts_when_always_failing(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch, 'instance_type = "t2.micrio"\n')
 
@@ -183,3 +211,62 @@ def test_run_live_allow_push_stops_at_max_attempts_when_always_failing(tmp_path,
 
     assert len(thread.attempts) == 3
     assert all(a.review.passed is False for a in thread.attempts)
+
+
+def test_allow_push_success_posts_one_pr_comment_with_confidence_and_diff(tmp_path, monkeypatch):
+    posted = []
+    _setup(tmp_path, monkeypatch, 'instance_type = "t2.micrio"\n', posted_comments=posted)
+    monkeypatch.setattr(
+        ci_wait, "wait_for_conclusion", lambda owner, repo, sha, **kw: ci_wait.CiResult(outcome=ci_wait.CiOutcome.SUCCESS, run_id=1)
+    )
+
+    live_orchestrator.run_live(_case(pr_number=48), run_id="live-test", workdir_root=tmp_path / "live", allow_push=True)
+
+    assert len(posted) == 1
+    pr_number, body = posted[0]
+    assert pr_number == 48
+    assert "Self-Healer" in body
+    assert "t2.micro" in body  # the diff is in the comment
+    assert "success" in body
+
+
+def test_dry_run_never_posts_a_pr_comment(tmp_path, monkeypatch):
+    posted = []
+    _setup(tmp_path, monkeypatch, 'instance_type = "t2.micrio"\n', posted_comments=posted)
+
+    live_orchestrator.run_live(_case(pr_number=49), run_id="live-test", workdir_root=tmp_path / "live", allow_push=False)
+
+    assert posted == []
+
+
+def test_allow_push_withhold_posts_a_comment_without_a_ci_result(tmp_path, monkeypatch):
+    posted = []
+    _make_bare_repo_with_branch(tmp_path, "fix-branch", "main.tf", 'instance_type = "t2.micro"\n')
+    bare = tmp_path / "remote.git"
+    monkeypatch.setattr(git_ops, "_repo_url", lambda owner, repo: str(bare))
+    monkeypatch.setattr(thread_module, "RUNS_ROOT", tmp_path / "runs")
+    monkeypatch.setattr(
+        pr_comment, "post_comment", lambda owner, repo, pr_number, body: posted.append((pr_number, body))
+    )
+
+    def fake_complete_no_op(system, user, max_tokens=2048):
+        if "Watcher agent" in system:
+            return json.dumps({"resource_address": None, "error_class": "Unknown", "raw_excerpt": user[:200], "aws_service": None})
+        if "Analyzer agent" in system:
+            first_file = user.split("--- ", 1)[1].split(" ---")[0]
+            return json.dumps({"paths": [first_file], "rationale": "fake"})
+        if "Coder agent" in system:
+            return json.dumps({"files": []})  # genuinely no-op
+        raise AssertionError(f"unexpected system prompt: {system[:60]!r}")
+
+    monkeypatch.setattr(llm, "complete", fake_complete_no_op)
+
+    live_orchestrator.run_live(
+        _case(pr_number=50, error="Error: something else"), run_id="live-test", workdir_root=tmp_path / "live", allow_push=True
+    )
+
+    assert len(posted) == 1
+    pr_number, body = posted[0]
+    assert pr_number == 50
+    assert "WITHHOLD" in body
+    assert "CI result" not in body

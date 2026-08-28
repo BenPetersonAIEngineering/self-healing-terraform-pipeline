@@ -54,9 +54,12 @@ def _auth_args() -> list[str]:
     Confirmed live (2026-08-27): without this, checkout_branch/
     commit_and_push silently fell back to whatever ambient git credential
     the *host machine* happened to have (macOS Keychain, in this case) —
-    it worked, but only by accident, and a push authenticated that way
-    did not trigger the PR's pull_request:synchronize Actions run at all.
-    An explicit token push (verified separately) did trigger it correctly.
+    it worked, but only by accident, and would fail on any machine without
+    one. That's the whole reason for this function. (An earlier version of
+    this docstring also blamed ambient auth for pushes not triggering the
+    PR's Actions run; that was wrong — the real cause was an emptied PR
+    diff hitting the workflow's `paths:` filter. See
+    docs/plans/terraform-self-healer/investigation-ci-trigger-flakiness.md.)
     GITHUB_TOKEN needs read access for live_watcher too — see
     02-architecture.md's External section.
     """

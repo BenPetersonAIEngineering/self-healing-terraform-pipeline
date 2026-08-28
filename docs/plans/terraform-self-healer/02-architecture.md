@@ -78,3 +78,30 @@ This is the piece that makes the same-MR-commit amendment above a real git actio
 - LocalStack (or equivalent free-tier local AWS emulator) — run as a local container during Reviewer's state-diff step. No real AWS account/spend. **Eval mode only** — live mode doesn't use LocalStack (see Live-trigger integration above).
 - GitHub API — offline, corpus-build-time only (sourcing issues + linked fix PRs into `corpus/`) in eval mode. In live mode, GitHub API access is on the pipeline's critical path: polling Actions runs, fetching job logs, and — the new piece — pushing commits, which needs a token with **write** access to the repo (existing sourcing only ever needed read access).
   - **Confirmed live (2026-08-27) against `hashicorp/terraform-provider-aws`**: listing open PRs, finding a failing run for a PR's head SHA, and fetching/reading a commit message all work fully unauthenticated for a public repo. Fetching the actual job **log content** (`/actions/jobs/{id}/logs`) does not — it 403s without a token even for a public repo, unlike every other endpoint used here. So `GITHUB_TOKEN` (read scope is enough for slice 8) is required earlier than expected — not just at the slice 10 push step.
+
+## Amendment (2026-08-27): real Confidence-check scoring
+
+**Problem**: `confidence.assess` has been a hardcoded stub since slice 1 (`score=0.9/COMMIT` whenever the Coder touched any file, `score=0.1/WITHHOLD` otherwise) — every prior slice deliberately deferred it. This gates a real, irreversible `git push` in live mode, so it's the one agent whose stub-ness actually matters for safety, not just eval metrics.
+
+**Design**: stays inside the existing tool-access boundary — Confidence-check gets no raw file-tool access, only structured inputs already flowing through the pipeline. Two layers:
+
+1. **Deterministic pre-checks** (no LLM call, cheap, decisive):
+   - Empty `patch.touched_paths` → `score=0.0`, `WITHHOLD` (existing behavior, unchanged).
+   - **Repeat-diff check**: if this attempt's `unified_diff` (whitespace-normalized) matches any *prior failed* attempt's diff already in `thread.attempts`, force `WITHHOLD` without calling the LLM — retrying an identical fix that already failed CI/review can't succeed differently, and burning an LLM call to reconfirm that is wasted attempt budget.
+2. **LLM judgment** (only reached if neither pre-check fires): a new prompt, same pattern as Analyzer/Coder, given the structured error, the Analyzer's `FileList` (paths + rationale), the patch diff, and retry history (score/reason from prior attempts) — asks the model to rate how likely the diff actually resolves the stated error. `score >= 0.6` → `COMMIT`, else `WITHHOLD`. Threshold is a module constant, tunable like `ci_wait.DEFAULT_TIMEOUT_SECONDS`.
+
+**Signature change** (both `orchestrator.py` and `live_orchestrator.py`, symmetric): `assess(patch, file_list, error, thread) -> ConfidenceVerdict` — adds `file_list` and `error` (the current attempt's, not thread history) so the LLM has the same diagnostic context Analyzer/Coder already had, without granting a repo tool.
+
+## Amendment (2026-08-27): automatic trigger + structured MR comment
+
+**Problem**: every real run so far has been kicked off by hand from a scratch script. Not visible, not automatic — the whole point of "self-healing."
+
+**Trigger**: a new `.github/workflows/self-heal.yml`, triggered by `workflow_run` on `terraform-demo.yml`'s completion, filtered to `conclusion == 'failure'` and `event == 'pull_request'`. No always-on process (rejected the `healer watch` poll-loop alternative — more moving parts, needs a host to keep it alive). `workflow_run` only fires for workflows from the base repo, which matches this repo's existing single-owner-no-forks constraint (CLAUDE.md), so no new fork-PR exposure.
+
+Runs `healer-run-pr <owner> <repo> <pr_number> --allow-push` (new console script, `healer/live/run_pr.py`) — a thin CLI wrapper that resolves one specific PR (via the PR number in the `workflow_run` event payload) into a `LiveCase` and calls the existing `run_live(..., allow_push=True)`, unchanged. No new pipeline logic; this only wires the existing slice 8-12 machinery to a real trigger.
+
+**Critical secret detail**: the default Actions-injected `GITHUB_TOKEN` deliberately cannot re-trigger downstream workflow runs on its own pushes (a GitHub anti-recursion guard) — using it here would silently reintroduce the exact CI-trigger bug fixed earlier (investigation-ci-trigger-flakiness.md). The workflow instead passes a **separate PAT** as `GITHUB_TOKEN` in the job's `env` (masking the built-in one), stored as the repo secret `HEALER_GITHUB_TOKEN`, reusing the same PAT already used for local live-mode pushes. `ANTHROPIC_API_KEY` becomes a repo secret too, same name.
+
+**MR comment**: new `healer/live/pr_comment.py`, called from `live_orchestrator.run_live` right after each attempt's outcome is known (after the CI wait, or immediately on `WITHHOLD`) — gated behind `allow_push=True` only, so dry-run/local testing never touches a real PR. Not a new agent, no new agent-boundary concern — it's an orchestration-level side effect posting already-computed data (`ConfidenceVerdict`, `Patch.unified_diff`, `CiResult`), the same category as `git_ops`'s push. Needs one new capability in `_github.py`: `post_json` (the module was read-only through slice 10).
+
+Comment body, one per attempt: confidence score + decision + LLM reason, the suggested fix as a diff block, and the CI outcome once known. Posted via `POST /repos/{owner}/{repo}/issues/{pr_number}/comments` (PRs are issues for this endpoint).

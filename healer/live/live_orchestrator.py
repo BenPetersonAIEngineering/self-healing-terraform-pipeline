@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from healer.agents import analyzer, coder, confidence, watcher
-from healer.live import ci_wait, git_ops, live_watcher
+from healer.live import ci_wait, git_ops, live_watcher, pr_comment
 from healer.live.git_ops import PushResult
 from healer.live.live_watcher import LiveCase
 from healer.models import AttemptRecord, CommitDecision, ReviewFeedback
@@ -60,7 +60,7 @@ def run_live(
         patch = coder.implement_fix(coder_fs, file_list, structured_error)
         _log(f"attempt {attempt_number}: Coder touched {patch.touched_paths}")
 
-        verdict = confidence.assess(patch, thread)
+        verdict = confidence.assess(patch, file_list, structured_error, thread)
         _log(f"attempt {attempt_number}: confidence={verdict.decision.value} score={verdict.score} ({verdict.reason})")
 
         review_feedback: ReviewFeedback | None = None
@@ -89,6 +89,20 @@ def run_live(
                         attempt_delta=f"attempt {attempt_number} pushed, CI still failing",
                     )
                     should_retry = True
+                elif ci_result.outcome == ci_wait.CiOutcome.NO_RUN:
+                    # Deliberately no retry: GitHub dispatching no run at all is
+                    # never transient, so re-pushing the same tree just burns an
+                    # attempt. Confirmed live 2026-08-27 — a fix that restores the
+                    # branch to match base empties the PR diff, and the workflow's
+                    # `paths:` filter then matches nothing. See
+                    # investigation-ci-trigger-flakiness.md.
+                    _log(f"attempt {attempt_number}: no CI run dispatched - {ci_result.detail}")
+                    review_feedback = ReviewFeedback(
+                        passed=False,
+                        resource=None,
+                        symptom=f"GitHub dispatched no CI run for this commit, so the fix is unvalidated: {ci_result.detail}",
+                        attempt_delta="no-run",
+                    )
                 else:  # TIMEOUT
                     review_feedback = ReviewFeedback(
                         passed=False,
@@ -96,7 +110,22 @@ def run_live(
                         symptom="CI did not complete within the wait timeout",
                         attempt_delta="timeout",
                     )
+
+                if allow_push:
+                    pr_comment.post_comment(
+                        case.owner,
+                        case.repo,
+                        case.pr_number,
+                        pr_comment.format_comment(attempt_number, verdict, patch, ci_result),
+                    )
             # not pushed (dry run, or the Coder made no change): review stays None, nothing to wait on
+        elif allow_push:
+            # WITHHOLD: no push happened, but still worth telling the PR why
+            # the healer looked at it and did nothing — that's the whole
+            # point of this feature (visibility), not just successful fixes.
+            pr_comment.post_comment(
+                case.owner, case.repo, case.pr_number, pr_comment.format_comment(attempt_number, verdict, patch, None)
+            )
 
         thread.attempts.append(
             AttemptRecord(
