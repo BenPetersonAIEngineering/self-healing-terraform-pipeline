@@ -11,3 +11,4 @@ resource "aws_s3_bucket_public_access_block" "logs_replica" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+# retrigger Thu Aug 27 21:11:36 PDT 2026
