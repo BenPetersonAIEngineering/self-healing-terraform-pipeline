@@ -5,7 +5,7 @@ import shutil
 
 from healer import corpus, thread as thread_module
 from healer.agents import analyzer, coder, confidence, reviewer, watcher
-from healer.models import AttemptRecord, CommitDecision
+from healer.models import AttemptRecord, CommitDecision, Patch
 from healer.thread import Thread
 from healer.tools.scoped_fs import ScopedFileTool
 
@@ -42,9 +42,17 @@ def run_bug(run_id: str, bug_id: str, max_attempts: int = 3) -> Thread:
         analyzer_fs = ScopedFileTool(allowed_roots=[str(workdir)])
         file_list = analyzer.diagnose(analyzer_fs, structured_error, thread.latest_feedback())
 
-        coder_roots = [str(workdir / p) for p in file_list.paths]
-        coder_fs = ScopedFileTool(allowed_roots=coder_roots)
-        patch = coder.implement_fix(coder_fs, file_list, structured_error)
+        if file_list.paths:
+            coder_roots = [str(workdir / p) for p in file_list.paths]
+            coder_fs = ScopedFileTool(allowed_roots=coder_roots)
+            patch = coder.implement_fix(coder_fs, file_list, structured_error)
+        else:
+            # Analyzer found nothing to point at (e.g. it flagged no .tf
+            # files at all, not even a fallback) — ScopedFileTool refuses
+            # an empty allowlist, and there's nothing for the Coder to do
+            # anyway. Falls through to confidence.assess's existing
+            # empty-patch WITHHOLD path rather than crashing.
+            patch = Patch(unified_diff="", touched_paths=[])
 
         verdict = confidence.assess(patch, file_list, structured_error, thread)
 

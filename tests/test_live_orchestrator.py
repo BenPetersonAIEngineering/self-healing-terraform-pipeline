@@ -270,3 +270,23 @@ def test_allow_push_withhold_posts_a_comment_without_a_ci_result(tmp_path, monke
     assert pr_number == 50
     assert "WITHHOLD" in body
     assert "CI result" not in body
+
+
+def test_live_analyzer_flagging_no_files_withholds_instead_of_crashing(tmp_path, monkeypatch):
+    posted = []
+    _setup(tmp_path, monkeypatch, 'instance_type = "t2.micrio"\n', posted_comments=posted)
+
+    from healer.agents import analyzer as analyzer_module
+    from healer.models import FileList
+
+    monkeypatch.setattr(analyzer_module, "diagnose", lambda *a, **kw: FileList(paths=[], rationale="nothing relevant found"))
+
+    thread, push_result = live_orchestrator.run_live(
+        _case(pr_number=51), run_id="live-test", workdir_root=tmp_path / "live", allow_push=True
+    )
+
+    assert len(thread.attempts) == 1
+    assert thread.attempts[0].patch.touched_paths == []
+    assert thread.attempts[0].confidence.decision.value == "withhold"
+    assert push_result is None
+    assert len(posted) == 1  # withhold still gets a visibility comment

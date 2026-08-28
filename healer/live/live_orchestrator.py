@@ -26,7 +26,7 @@ from healer.agents import analyzer, coder, confidence, watcher
 from healer.live import ci_wait, git_ops, live_watcher, pr_comment
 from healer.live.git_ops import PushResult
 from healer.live.live_watcher import LiveCase
-from healer.models import AttemptRecord, CommitDecision, ReviewFeedback
+from healer.models import AttemptRecord, CommitDecision, Patch, ReviewFeedback
 from healer.thread import Thread
 from healer.tools.scoped_fs import ScopedFileTool
 
@@ -43,6 +43,8 @@ def run_live(
     _log(f"PR #{case.pr_number}: checking out {case.branch} (allow_push={allow_push})")
     workdir = workdir_root / str(case.pr_number) / "workdir"
     git_ops.checkout_branch(case.owner, case.repo, case.branch, workdir)
+    _debug_tf_files = [str(p) for p in workdir.rglob("*.tf")]
+    _log(f"debug: workdir={workdir} exists={workdir.exists()} .tf files found={_debug_tf_files}")
 
     current_error_output = case.error_output
     last_push_result: PushResult | None = None
@@ -53,11 +55,19 @@ def run_live(
 
         analyzer_fs = ScopedFileTool(allowed_roots=[str(workdir)])
         file_list = analyzer.diagnose(analyzer_fs, structured_error, thread.latest_feedback())
-        _log(f"attempt {attempt_number}: Analyzer flagged {file_list.paths}")
+        _log(f"attempt {attempt_number}: Analyzer flagged {file_list.paths} (rationale: {file_list.rationale})")
 
-        coder_roots = [str(workdir / p) for p in file_list.paths]
-        coder_fs = ScopedFileTool(allowed_roots=coder_roots)
-        patch = coder.implement_fix(coder_fs, file_list, structured_error)
+        if file_list.paths:
+            coder_roots = [str(workdir / p) for p in file_list.paths]
+            coder_fs = ScopedFileTool(allowed_roots=coder_roots)
+            patch = coder.implement_fix(coder_fs, file_list, structured_error)
+        else:
+            # Analyzer found nothing to point at — ScopedFileTool refuses an
+            # empty allowlist, and there's nothing for the Coder to do
+            # anyway. Falls through to confidence.assess's existing
+            # empty-patch WITHHOLD path rather than crashing.
+            _log(f"attempt {attempt_number}: Analyzer flagged no files, skipping Coder")
+            patch = Patch(unified_diff="", touched_paths=[])
         _log(f"attempt {attempt_number}: Coder touched {patch.touched_paths}")
 
         verdict = confidence.assess(patch, file_list, structured_error, thread)

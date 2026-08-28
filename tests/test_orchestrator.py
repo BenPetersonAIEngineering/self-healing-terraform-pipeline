@@ -64,3 +64,22 @@ def test_orchestrator_denies_analyzer_access_to_eval_dir(tmp_path, monkeypatch):
         assert False, "analyzer should not be able to read eval/"
     except PathNotAllowed:
         pass
+
+
+def test_analyzer_flagging_no_files_withholds_instead_of_crashing(tmp_path, monkeypatch):
+    corpus_root = _copy_bug_001_corpus(tmp_path)
+    monkeypatch.setattr(corpus, "CORPUS_ROOT", corpus_root)
+    monkeypatch.setattr(thread_module, "RUNS_ROOT", tmp_path / "runs")
+    monkeypatch.setattr(localstack, "diff_state", lambda bug_id, patch: {})
+
+    from healer.agents import analyzer as analyzer_module
+    from healer.models import FileList
+
+    monkeypatch.setattr(analyzer_module, "diagnose", lambda *a, **kw: FileList(paths=[], rationale="nothing relevant found"))
+    monkeypatch.setattr(llm, "complete", fixing_fake_complete)
+
+    thread = orchestrator.run_bug(run_id="test-run", bug_id="bug-001", max_attempts=1)
+
+    assert len(thread.attempts) == 1
+    assert thread.attempts[0].patch.touched_paths == []
+    assert thread.attempts[0].confidence.decision.value == "withhold"
