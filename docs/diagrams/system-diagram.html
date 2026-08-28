@@ -29,26 +29,12 @@
       margin-bottom: 0.5rem;
     }
 
-    .pulse-dot {
-      width: 12px;
-      height: 12px;
-      background: #34d399;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
     h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
 
     .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
 
     .diagram-container {
       background-color: rgba(15, 23, 42, 0.5);
-      background-image:
-        linear-gradient(#1e293b 1px, transparent 1px),
-        linear-gradient(90deg, #1e293b 1px, transparent 1px);
-      background-size: 40px 40px;
       border-radius: 1rem;
       border: 1px solid #1e293b;
       padding: 1.5rem;
@@ -145,7 +131,6 @@
   <div class="container" id="report-container">
     <div class="header">
       <div class="header-row">
-        <div class="pulse-dot"></div>
         <h1>Terraform Self-Healer — Pipeline Architecture</h1>
         <div class="toolbar">
           <div class="toolbar-actions">
