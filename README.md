@@ -23,40 +23,9 @@ The whole thing runs on its own. When a PR's CI fails, `.github/workflows/self-h
 
 ## System diagram
 
-```mermaid
-flowchart TD
-    PR["Open GitHub PR<br>demo/*.tf change"]
-    CI["terraform-demo.yml<br>GitHub Actions + LocalStack"]
-    PR --> CI
-    CI -->|passes| GREEN(["done"])
-    CI -->|fails| HOOK["self-heal.yml<br>workflow_run trigger"]
+![Terraform Self-Healer pipeline architecture](docs/diagrams/system-diagram.png)
 
-    HOOK --> RUNPR["healer-run-pr CLI"]
-    RUNPR --> ORCH["live_orchestrator<br>retry loop, max 3 attempts"]
-
-    subgraph AGENTS["Agent pipeline — tool access scoped per agent"]
-        direction LR
-        WATCHER["Watcher<br>structures the error<br>no repo access"]
-        ANALYZER["Analyzer<br>names files to change"]
-        CODER["Coder<br>writes the fix<br>ScopedFileTool: Analyzer's paths only"]
-        CONF["Confidence-check<br>real LLM score<br>COMMIT / WITHHOLD"]
-        WATCHER --> ANALYZER --> CODER --> CONF
-    end
-
-    ORCH --> WATCHER
-
-    CONF -->|WITHHOLD| RETRY{"attempts < 3?"}
-    RETRY -->|yes| WATCHER
-    RETRY -->|no| STOP(["stopped: not fixed"])
-
-    CONF -->|COMMIT| GITPUSH["git_ops<br>push fix commit to the PR branch"]
-    GITPUSH --> CI
-    GITPUSH --> CIWAIT["ci_wait<br>poll for the re-triggered run"]
-    CIWAIT -->|success| COMMENT["pr_comment<br>post confidence + diff + result"]
-    CIWAIT -->|failure| RETRY
-    CIWAIT -->|no run / timeout| STOP
-    COMMENT --> PR
-```
+[Interactive version](docs/diagrams/system-diagram.html) (open locally in a browser — export to PNG/PDF via the `⋯` toolbar).
 
 ## GitHub Actions integration
 
