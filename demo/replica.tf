@@ -4,7 +4,7 @@ resource "aws_s3_bucket" "logs_replica" {
 }
 
 resource "aws_s3_bucket_public_access_block" "logs_replica" {
-  bucket = aws_s3_bucket.logs_replica.di
+  bucket = aws_s3_bucket.logs_replica.id
 
   block_public_acls       = true
   block_public_policy     = true
