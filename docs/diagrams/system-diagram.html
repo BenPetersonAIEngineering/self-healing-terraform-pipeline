@@ -203,9 +203,10 @@
         <line x1="740" y1="355" x2="778" y2="355" stroke="#94a3b8" stroke-width="1.5"/>
         <polygon points="778,355 769,351.5 769,358.5" fill="#94a3b8"/>
 
-        <!-- Confidence-check -> WITHHOLD -> attempts check -->
-        <path d="M 990 420 L 990 460 L 1080 460 L 1080 490" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
-        <polygon points="1080,490 1076.5,481 1083.5,481" fill="#fbbf24"/>
+        <!-- Confidence-check -> WITHHOLD -> attempts check (tip overlaps 4px past the box's
+             dashed top edge so it stays visually flush regardless of dash phase) -->
+        <path d="M 990 420 L 990 460 L 1080 460 L 1080 494" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+        <polygon points="1080,494 1076.5,485 1083.5,485" fill="#fbbf24"/>
         <text x="1000" y="475" fill="#fbbf24" font-size="8">WITHHOLD</text>
 
         <!-- Confidence-check -> COMMIT -> git_ops -->
@@ -237,9 +238,11 @@
         <polygon points="660,706 656.5,697 663.5,697" fill="#34d399"/>
         <text x="676" y="690" fill="#34d399" font-size="8">success</text>
 
-        <!-- ci_wait -> failure -> attempts check (routed through the gap above the stopped box) -->
-        <path d="M 790 608 L 900 608 L 900 575 L 1140 575 L 1140 560" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
-        <polygon points="1140,560 1136.5,569 1143.5,569" fill="#fbbf24"/>
+        <!-- ci_wait -> failure -> attempts check (single clean bend, routed above the stopped box; tip
+             overlaps 4px past the box's dashed bottom edge so it stays visually flush regardless of
+             dash phase — the box's opaque background rect, drawn after, masks the overlap) -->
+        <path d="M 790 608 L 790 575 L 1140 575 L 1140 556" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+        <polygon points="1140,556 1136.5,565 1143.5,565" fill="#fbbf24"/>
         <text x="960" y="569" fill="#fbbf24" font-size="8">failure</text>
 
         <!-- ci_wait -> no run/timeout -> stopped -->
