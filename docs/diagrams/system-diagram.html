@@ -44,7 +44,11 @@
     .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
 
     .diagram-container {
-      background: rgba(15, 23, 42, 0.5);
+      background-color: rgba(15, 23, 42, 0.5);
+      background-image:
+        linear-gradient(#1e293b 1px, transparent 1px),
+        linear-gradient(90deg, #1e293b 1px, transparent 1px);
+      background-size: 40px 40px;
       border-radius: 1rem;
       border: 1px solid #1e293b;
       padding: 1.5rem;
@@ -156,92 +160,96 @@
     </div>
 
     <div class="diagram-container">
-      <svg viewBox="0 0 1300 980">
-        <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
-          </marker>
-          <marker id="arrowhead-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#34d399" />
-          </marker>
-          <marker id="arrowhead-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185" />
-          </marker>
-          <marker id="arrowhead-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24" />
-          </marker>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
-          </pattern>
-        </defs>
-
-        <rect width="100%" height="100%" fill="url(#grid)" />
+      <svg viewBox="0 0 1300 980" width="1300" height="980">
+        <!-- No <pattern> (background grid) or <marker> (arrowheads) defs here: html2canvas
+             cannot rasterize either, and silently renders them as blank space. The grid is a
+             CSS background on .diagram-container instead; arrowheads are manually drawn
+             <polygon>s placed right after each line/path. -->
 
         <!-- =================================================================
              ARROWS (drawn first so they sit behind boxes)
              ================================================================= -->
 
         <!-- PR -> CI -->
-        <line x1="180" y1="75" x2="228" y2="75" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="180" y1="75" x2="228" y2="75" stroke="#64748b" stroke-width="1.5"/>
+        <polygon points="228,75 219,71.5 219,78.5" fill="#64748b"/>
 
         <!-- CI -> done (passes) -->
-        <path d="M 500 60 L 540 60 L 540 75 L 578 75" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-emerald)"/>
+        <path d="M 500 60 L 540 60 L 540 75 L 578 75" fill="none" stroke="#34d399" stroke-width="1.5"/>
+        <polygon points="578,75 569,71.5 569,78.5" fill="#34d399"/>
         <text x="520" y="52" fill="#34d399" font-size="8" text-anchor="middle">passes</text>
 
         <!-- CI -> self-heal.yml (fails) -->
-        <path d="M 310 110 L 310 170" fill="none" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead-rose)"/>
+        <path d="M 310 110 L 310 170" fill="none" stroke="#fb7185" stroke-width="1.5"/>
+        <polygon points="310,170 306.5,161 313.5,161" fill="#fb7185"/>
         <text x="326" y="145" fill="#fb7185" font-size="8">fails</text>
 
         <!-- self-heal.yml -> healer-run-pr -->
-        <line x1="400" y1="200" x2="448" y2="200" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="400" y1="200" x2="448" y2="200" stroke="#64748b" stroke-width="1.5"/>
+        <polygon points="448,200 439,196.5 439,203.5" fill="#64748b"/>
         <!-- healer-run-pr -> live_orchestrator -->
-        <line x1="620" y1="200" x2="668" y2="200" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="620" y1="200" x2="668" y2="200" stroke="#64748b" stroke-width="1.5"/>
+        <polygon points="668,200 659,196.5 659,203.5" fill="#64748b"/>
 
         <!-- live_orchestrator -> agent pipeline (down into Watcher) -->
-        <path d="M 763 230 L 763 260 L 150 260 L 150 298" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path d="M 763 230 L 763 260 L 150 260 L 150 298" fill="none" stroke="#64748b" stroke-width="1.5"/>
+        <polygon points="150,298 146.5,289 153.5,289" fill="#64748b"/>
 
         <!-- Watcher -> Analyzer -> Coder -> Confidence-check -->
-        <line x1="260" y1="355" x2="298" y2="355" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <line x1="500" y1="355" x2="538" y2="355" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <line x1="740" y1="355" x2="778" y2="355" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="260" y1="355" x2="298" y2="355" stroke="#94a3b8" stroke-width="1.5"/>
+        <polygon points="298,355 289,351.5 289,358.5" fill="#94a3b8"/>
+        <line x1="500" y1="355" x2="538" y2="355" stroke="#94a3b8" stroke-width="1.5"/>
+        <polygon points="538,355 529,351.5 529,358.5" fill="#94a3b8"/>
+        <line x1="740" y1="355" x2="778" y2="355" stroke="#94a3b8" stroke-width="1.5"/>
+        <polygon points="778,355 769,351.5 769,358.5" fill="#94a3b8"/>
 
         <!-- Confidence-check -> WITHHOLD -> attempts check -->
-        <path d="M 990 420 L 990 460 L 1080 460 L 1080 490" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead-amber)"/>
+        <path d="M 990 420 L 990 460 L 1080 460 L 1080 490" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+        <polygon points="1080,490 1076.5,481 1083.5,481" fill="#fbbf24"/>
         <text x="1000" y="475" fill="#fbbf24" font-size="8">WITHHOLD</text>
 
         <!-- Confidence-check -> COMMIT -> git_ops -->
-        <path d="M 900 420 L 900 460 L 660 460 L 660 490" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-emerald)"/>
+        <path d="M 900 420 L 900 460 L 660 460 L 660 490" fill="none" stroke="#34d399" stroke-width="1.5"/>
+        <polygon points="660,490 656.5,481 663.5,481" fill="#34d399"/>
         <text x="790" y="475" fill="#34d399" font-size="8">COMMIT</text>
 
         <!-- attempts < 3? -- yes --> back to Watcher -->
-        <path d="M 990 560 L 990 620 L 60 620 L 60 330 L 118 330" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrowhead-amber)"/>
+        <path d="M 990 560 L 990 620 L 60 620 L 60 330 L 118 330" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <polygon points="118,330 109,326.5 109,333.5" fill="#fbbf24"/>
         <text x="70" y="614" fill="#fbbf24" font-size="8">yes: retry</text>
 
         <!-- attempts < 3? -- no --> stopped -->
-        <line x1="1080" y1="560" x2="1080" y2="598" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead-rose)"/>
+        <line x1="1080" y1="560" x2="1080" y2="598" stroke="#fb7185" stroke-width="1.5"/>
+        <polygon points="1080,598 1076.5,589 1083.5,589" fill="#fb7185"/>
         <text x="1096" y="582" fill="#fb7185" font-size="8">no</text>
 
         <!-- git_ops -> re-triggers CI (loop back to top, routed clear of the agent subsystem) -->
-        <path d="M 700 490 L 700 470 L 980 470 L 980 20 L 365 20 L 365 43" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrowhead-emerald)"/>
+        <path d="M 700 490 L 700 470 L 980 470 L 980 20 L 365 20 L 365 43" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <polygon points="365,43 361.5,34 368.5,34" fill="#34d399"/>
         <text x="1050" y="250" fill="#34d399" font-size="8" transform="rotate(-90 1050 250)" text-anchor="middle">re-triggers CI</text>
 
         <!-- git_ops -> ci_wait -->
-        <line x1="660" y1="550" x2="660" y2="598" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="660" y1="550" x2="660" y2="598" stroke="#64748b" stroke-width="1.5"/>
+        <polygon points="660,598 656.5,589 663.5,589" fill="#64748b"/>
 
         <!-- ci_wait -> success -> pr_comment -->
-        <line x1="660" y1="668" x2="660" y2="706" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-emerald)"/>
+        <line x1="660" y1="668" x2="660" y2="706" stroke="#34d399" stroke-width="1.5"/>
+        <polygon points="660,706 656.5,697 663.5,697" fill="#34d399"/>
         <text x="676" y="690" fill="#34d399" font-size="8">success</text>
 
         <!-- ci_wait -> failure -> attempts check (routed through the gap above the stopped box) -->
-        <path d="M 790 608 L 900 608 L 900 575 L 1140 575 L 1140 560" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead-amber)"/>
+        <path d="M 790 608 L 900 608 L 900 575 L 1140 575 L 1140 560" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+        <polygon points="1140,560 1136.5,569 1143.5,569" fill="#fbbf24"/>
         <text x="960" y="569" fill="#fbbf24" font-size="8">failure</text>
 
         <!-- ci_wait -> no run/timeout -> stopped -->
-        <line x1="790" y1="645" x2="998" y2="645" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrowhead-rose)"/>
+        <line x1="790" y1="645" x2="998" y2="645" stroke="#fb7185" stroke-width="1.5"/>
+        <polygon points="998,645 989,641.5 989,648.5" fill="#fb7185"/>
         <text x="895" y="639" fill="#fb7185" font-size="8" text-anchor="middle">no run / timeout</text>
 
         <!-- pr_comment -> back to PR -->
-        <path d="M 540 738 L 110 738 L 110 110" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrowhead)"/>
+        <path d="M 540 738 L 110 738 L 110 110" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <polygon points="110,110 106.5,119 113.5,119" fill="#64748b"/>
         <text x="126" y="420" fill="#64748b" font-size="8" transform="rotate(-90 126 420)" text-anchor="middle">posts comment on PR</text>
 
         <!-- =================================================================
@@ -435,7 +443,7 @@
         const el = document.getElementById('report-container');
         const r = el.getBoundingClientRect();
         const pad = 32;
-        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 3, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
         const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         btn.textContent = '✓ Copied!';
@@ -452,7 +460,7 @@
         const el = document.getElementById('report-container');
         const r = el.getBoundingClientRect();
         const pad = 32;
-        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 3, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
         const link = document.createElement('a');
         link.download = 'terraform-self-healer-diagram.png';
         link.href = canvas.toDataURL('image/png');
@@ -471,7 +479,7 @@
         const el = document.getElementById('report-container');
         const r = el.getBoundingClientRect();
         const pad = 32;
-        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 3, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
         const imgData = canvas.toDataURL('image/png');
         const { jsPDF } = window.jspdf;
         const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
