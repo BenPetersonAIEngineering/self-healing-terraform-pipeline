@@ -12,3 +12,4 @@ resource "aws_s3_bucket_public_access_block" "logs_replica" {
   restrict_public_buckets = true
 }
 # retrigger Thu Aug 27 21:11:36 PDT 2026
+# retrigger after path-resolution fix Thu Aug 27 21:14:45 PDT 2026
