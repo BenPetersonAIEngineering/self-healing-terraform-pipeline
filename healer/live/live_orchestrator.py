@@ -43,8 +43,6 @@ def run_live(
     _log(f"PR #{case.pr_number}: checking out {case.branch} (allow_push={allow_push})")
     workdir = workdir_root / str(case.pr_number) / "workdir"
     git_ops.checkout_branch(case.owner, case.repo, case.branch, workdir)
-    _debug_tf_files = [str(p) for p in workdir.rglob("*.tf")]
-    _log(f"debug: workdir={workdir} exists={workdir.exists()} .tf files found={_debug_tf_files}")
 
     current_error_output = case.error_output
     last_push_result: PushResult | None = None

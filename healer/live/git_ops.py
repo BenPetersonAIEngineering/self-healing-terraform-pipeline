@@ -71,6 +71,16 @@ def _auth_args() -> list[str]:
 
 
 def checkout_branch(owner: str, repo: str, branch: str, workdir: Path) -> None:
+    # Must be absolute before it's used both as the clone destination arg
+    # AND to derive `cwd=` for the subprocess call below — a relative
+    # workdir gets resolved twice (once against the real process cwd for
+    # `cwd=workdir.parent`, then again by git against THAT cwd for the
+    # destination arg), landing the clone one level too deep and silently
+    # leaving `workdir` itself never created. Confirmed live in GitHub
+    # Actions (2026-08-28): every prior caller happened to pass an
+    # absolute path (pytest's tmp_path, or an absolute scratch path), so
+    # this was invisible until run_pr.py's CLI passed a relative one.
+    workdir = workdir.resolve()
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.parent.mkdir(parents=True, exist_ok=True)

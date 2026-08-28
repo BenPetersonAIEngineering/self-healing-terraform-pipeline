@@ -44,6 +44,23 @@ def test_checkout_branch_clones_the_right_branch_content(tmp_path, monkeypatch):
     assert current_branch == "fix-branch"
 
 
+def test_checkout_branch_works_with_a_relative_workdir_path(tmp_path, monkeypatch):
+    """Regression test: a relative `workdir` used to get resolved twice —
+    once for the subprocess's cwd=, once by git against that cwd — landing
+    the clone one directory too deep and leaving `workdir` itself empty.
+    Only surfaced once a real caller (run_pr.py, for the automatic
+    self-heal trigger) passed a relative path instead of an absolute one
+    from a tmp_path fixture. Confirmed live in GitHub Actions 2026-08-28."""
+    bare = _make_bare_repo_with_branch(tmp_path, "fix-branch", "main.tf", 'instance_type = "t2.micrio"\n')
+    monkeypatch.setattr(git_ops, "_repo_url", lambda owner, repo: str(bare))
+    monkeypatch.chdir(tmp_path)
+
+    workdir = Path("relative") / "workdir"
+    git_ops.checkout_branch("me", "repo", "fix-branch", workdir)
+
+    assert (tmp_path / "relative" / "workdir" / "main.tf").read_text() == 'instance_type = "t2.micrio"\n'
+
+
 def test_commit_and_push_dry_run_commits_locally_but_never_touches_remote(tmp_path, monkeypatch):
     bare = _make_bare_repo_with_branch(tmp_path, "fix-branch", "main.tf", 'instance_type = "t2.micrio"\n')
     monkeypatch.setattr(git_ops, "_repo_url", lambda owner, repo: str(bare))
