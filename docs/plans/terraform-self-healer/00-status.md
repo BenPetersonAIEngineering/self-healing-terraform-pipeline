@@ -1,5 +1,9 @@
 # Status: Terraform Self-Healer
 
+## 2026-08-28: eval harness cut
+
+Removed the eval harness — Reviewer, LocalStack diffing, `corpus/`, sourcing, the `healer run`/`report` CLI. Slices 1-7 below document real work, but with only 2 corpus bugs ever sourced, its precision numbers never discriminated anything; it proved the scoring mechanism worked, not that the healer was actually good at fixing things. Once live mode (slices 8-13) was proven working end to end for real, maintaining a second orchestration path for a benchmark that didn't discriminate stopped making sense. Everything below is historical record — see `CLAUDE.md` for the current, simplified architecture.
+
 - Gate 1 — Product: APPROVED 2026-08-27
 - Gate 2 — Architecture: APPROVED 2026-08-27 (reopened same day for the same-MR-commit amendment, re-approved)
 - Gate 3 — Program Design: APPROVED 2026-08-27
@@ -16,8 +20,9 @@
 - [x] Slice 8 — read-only live watcher: poll real GitHub Actions for failing open PRs, build LiveCase, detect healer-vs-human commits. No writes, safe to run live immediately. Mostly verified live (see notes below); log-content fetch needs GITHUB_TOKEN, unverified.
 - [x] Slice 9 — real git workdir + dry-run push: real checkout, real Analyzer/Coder/Confidence run, commit built locally but never pushed (`allow_push=False` default). Fully verified against real local git plumbing (LLM calls mocked, no API key here).
 - [x] Slice 10 — real push + CI-wait scoring, gated by `--allow-push`. RUN FOR REAL against PR #1: diagnosis + fix + push all confirmed correct end-to-end. CI-trigger reliability is an external GitHub flakiness issue, not resolved (not a code bug) — see notes below.
-- [ ] Slice 11 — `healer watch` polling loop CLI glue. (fully verified — pure aggregation logic, 36/36 tests green)
+- [ ] Slice 11 — `healer watch` polling loop CLI glue. Superseded 2026-08-28 by Slice 13's `workflow_run`-triggered GitHub Actions job — no always-on process needed, so this was never built.
 - [x] Slice 12 — real Confidence-check scoring: design APPROVED 2026-08-27, see amendment sections in 02-architecture.md / 03-program-design.md. Built, unit-tested (76/76 green), AND run for real against a live PR (below).
+- [x] Slice 13 — automatic trigger + structured PR comment: design APPROVED 2026-08-27/28, see the amendment in 02-architecture.md. `.github/workflows/self-heal.yml` fires on `workflow_run`/failure and runs `healer-run-pr`; a PR comment (confidence, reasoning, diff, CI outcome) posts on every real COMMIT attempt. Run for real end to end with zero manual invocation (see below) — this is what makes the pipeline actually automatic rather than something run by hand per PR.
 
 ## Notes for a fresh session
 - Project brief lives in `/Users/ben/Dev/self-healing-terraform-pipeline/CLAUDE.md` — read it first.

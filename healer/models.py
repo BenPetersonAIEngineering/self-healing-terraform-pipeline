@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -50,11 +50,3 @@ class AttemptRecord:
     patch: Patch
     confidence: ConfidenceVerdict
     review: ReviewFeedback | None = None
-
-
-@dataclass
-class RunSummary:
-    run_id: str
-    bug_results: dict[str, str] = field(default_factory=dict)
-    mean_attempts_on_success: float = 0.0
-    confidence_precision: float | None = None  # None = no commits pushed yet, nothing to score

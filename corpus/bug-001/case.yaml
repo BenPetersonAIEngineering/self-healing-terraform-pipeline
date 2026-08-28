@@ -1,8 +1,0 @@
-source: hand-curated (tracer bullet fixture, slice 1)
-error_output: |
-  Error: creating EC2 Instance: InvalidParameterValue: Value (t2.micrio) for parameter
-  instanceType is invalid. Unknown instance type: t2.micrio
-
-    with aws_instance.web,
-    on main.tf line 2, in resource "aws_instance" "web":
-     2: resource "aws_instance" "web" {

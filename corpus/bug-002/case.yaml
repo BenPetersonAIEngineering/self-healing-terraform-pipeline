@@ -1,9 +1,0 @@
-source: GitHub PR https://github.com/terraform-aws-modules/terraform-aws-s3-bucket/pull/401
-error_output: "Error: Invalid index\n\n  on .terraform/modules/s3_bucket/main.tf line\
-  \ ...:\n  data \"aws_iam_policy_document\" \"inventory_and_analytics_destination_policy\"\
-  \ {\n    ...\n  }\n\nThe given key does not identify an element in this collection\
-  \ value: aws_s3_bucket.this\nis empty tuple.\n\nTriggered with attach_analytics_destination_policy\
-  \ = true set on the\nterraform-aws-modules/terraform-aws-s3-bucket module, either\
-  \ with\nis_directory_bucket = true, or with create_bucket = false \u2014 both leave\n\
-  aws_s3_bucket.this with count = 0, but the policy-document guard evaluates\nthe\
-  \ analytics branch anyway due to && binding tighter than || in the count\nexpression.\n"
